@@ -1383,14 +1383,23 @@ public:
         if (attribute == kIOWindowServerActiveAttribute) return kIOReturnSuccess;
         if (attribute == kIOPowerAttribute) {
             /* display sleep turns the outputs off; wake lights them again with the same buffer */
+            static const bool tracePower = PE_parse_boot_argn("-nmxlidtrace", nullptr, 0);
+            const char *direction = value ? "on" : "off";
+            if (tracePower)
+                FBLOG("power trace: display %s requested, opened=%d device=%d backlight=%d",
+                      direction, !!fOpened, fDev != nullptr, fBacklight != nullptr);
             nmx_step(value ? "fb: power attribute on, DPMS on" : "fb: power attribute off, DPMS off");
             if (!value && fBacklight) fBacklight->setPowered(false);
-            if (fDev) nmx_fb_power(fDev, value != 0);
+            if (fDev) {
+                int result = nmx_fb_power(fDev, value != 0);
+                if (tracePower) FBLOG("power trace: DPMS %s returned %d", direction, result);
+            }
             nmx_step("fb: DPMS returned");
             if (value && fBacklight) fBacklight->setPowered(true);   /* i915 relights at its own level: ours again */
             if (!fOpened) return kIOReturnSuccess;
             if (value) {
                 IOReturn r = IOFramebuffer::setAttribute(attribute, value);
+                if (tracePower) FBLOG("power trace: IOFramebuffer display on returned 0x%x", (unsigned)r);
                 nmx_step("fb: base power attribute returned, notifying");
                 handleEvent(kIOFBNotifyDidPowerOn);
                 nmx_step("fb: power-on notified");
@@ -1398,6 +1407,7 @@ public:
             }
             handleEvent(kIOFBNotifyWillPowerOff);
             IOReturn r = IOFramebuffer::setAttribute(attribute, value);
+            if (tracePower) FBLOG("power trace: IOFramebuffer display off returned 0x%x", (unsigned)r);
             return r == kIOReturnUnsupported ? kIOReturnSuccess : r;
         }
         return IOFramebuffer::setAttribute(attribute, value);
