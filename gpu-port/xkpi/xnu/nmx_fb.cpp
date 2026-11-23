@@ -1383,7 +1383,7 @@ public:
         if (attribute == kIOWindowServerActiveAttribute) return kIOReturnSuccess;
         if (attribute == kIOPowerAttribute) {
             /* display sleep turns the outputs off; wake lights them again with the same buffer */
-            static const bool tracePower = PE_parse_boot_argn("-nmxlidtrace", nullptr, 0);
+            const bool tracePower = PE_parse_boot_argn("-nmxlidtrace", nullptr, 0);
             const char *direction = value ? "on" : "off";
             if (tracePower)
                 FBLOG("power trace: display %s requested, opened=%d device=%d backlight=%d",
