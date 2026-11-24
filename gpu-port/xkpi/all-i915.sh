@@ -69,6 +69,7 @@ else
 fi
 GP=$(find "$K/drm-kmod" -path '*i915/display/intel_display_power.c' | head -1)
 if [ -n "$GP" ]; then
+    "${NMX_PY:-/opt/homebrew/bin/python3}" patch_i915_pm_observe.py "$GP" || exit 1
     ${NMX_PY:-/opt/homebrew/bin/python3} patch_i915_display_rpm.py "$GP" || { echo "ERROR: display runtime-PM patch failed"; exit 1; }
 else
     echo "ERROR: display/intel_display_power.c not found"; exit 1

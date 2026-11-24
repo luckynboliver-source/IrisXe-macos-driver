@@ -16,6 +16,8 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOUserClient.h>
 #include <IOKit/IOLib.h>
+#include <IOKit/pwr_mgt/RootDomain.h>
+#include <libkern/c++/OSNumber.h>
 #include <IOKit/IOLocks.h>
 #include <IOKit/IONVRAM.h>
 #include <IOKit/pci/IOPCIDevice.h>
@@ -38,6 +40,20 @@ IOService *nmx_fb_publish(IOService *gpu, void *dev);
 void nmx_fb_unpublish(IOService *fb, IOService *gpu, void *dev);
 extern "C" void nmx_boot_snapshot(void);
 extern "C" int nmx_tcache_disable;   /* b120: bsdcompat/src/nmx_kernel.c */
+
+/* Called from the i915 build hooks as well as the IOKit PM callback.
+ * An early policy value is diagnostic only; it may not be the final sleep type. */
+extern "C" void nmx_pm_observe(const char *stage, int value)
+{
+    if (!PE_parse_boot_argn("-nmxpmtrace", nullptr, 0))
+        return;
+    IOPMrootDomain *root = getPMRootDomain();
+    OSObject *obj = root ? root->copyProperty("IOPMSystemSleepType") : nullptr;
+    OSNumber *type = OSDynamicCast(OSNumber, obj);
+    IOLog("NMXPM stage=%s value=%d rootType=%d\n", stage, value,
+          type ? (int)type->unsigned32BitValue() : -1);
+    OSSafeReleaseNULL(obj);
+}
 
 class NMXGPU : public IOService {
     OSDeclareDefaultStructors(NMXGPU)
@@ -677,6 +693,7 @@ void NMXGPU::attachNow()
     knob = 0;
     bool noclaim = PE_parse_boot_argn("nmxnoclaim", &knob, sizeof(knob)) && knob != 0;
     IOLog("NullMoth GPU: experiment knobs: nmxnopm=%d nmxnoclaim=%d nmxnovga=%d\n", nopm ? 1 : 0, noclaim ? 1 : 0, nmx_novga());
+    nmx_pm_observe("gpu-pm-register", !nopm);
     if (!nopm) {
         PMinit();
         pci_->joinPMtree(this);
@@ -824,7 +841,9 @@ IOReturn NMXGPU::setPowerState(unsigned long state, IOService *device)
     IOLog("NullMoth GPU: power state %lu requested (device is %s)\n", state, powered_ ? "on" : "off");
     if (state == 0 && dev_ != nullptr && powered_) { govStop(); releaseAwake("sleep"); }
     if (dev_ != nullptr && (state != 0) != powered_) {
+        nmx_pm_observe(state ? "resume-enter" : "suspend-enter", (int)state);
         int err = nmx_port_power(dev_, state != 0);
+        nmx_pm_observe(state ? "resume-return" : "suspend-return", err);
         powered_ = state != 0;
         if (err)
             IOLog("NullMoth GPU: %s returned %d\n", state ? "resume" : "suspend", err);
