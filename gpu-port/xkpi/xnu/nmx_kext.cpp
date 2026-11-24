@@ -47,7 +47,7 @@ extern "C" void nmx_pm_observe(const char *stage, int value)
 {
     if (!PE_parse_boot_argn("-nmxpmtrace", nullptr, 0))
         return;
-    IOPMrootDomain *root = getPMRootDomain();
+    IOPMrootDomain *root = IOService::getPMRootDomain();
     OSObject *obj = root ? root->copyProperty("IOPMSystemSleepType") : nullptr;
     OSNumber *type = OSDynamicCast(OSNumber, obj);
     IOLog("NMXPM stage=%s value=%d rootType=%d\n", stage, value,
