@@ -16,6 +16,8 @@
 #include <IOKit/IOService.h>
 #include <IOKit/IOUserClient.h>
 #include <IOKit/IOLib.h>
+#include <IOKit/pwr_mgt/RootDomain.h>
+#include <libkern/c++/OSNumber.h>
 #include <IOKit/IOLocks.h>
 #include <IOKit/IONVRAM.h>
 #include <IOKit/pci/IOPCIDevice.h>
@@ -38,6 +40,25 @@ IOService *nmx_fb_publish(IOService *gpu, void *dev);
 void nmx_fb_unpublish(IOService *fb, IOService *gpu, void *dev);
 extern "C" void nmx_boot_snapshot(void);
 extern "C" int nmx_tcache_disable;   /* b120: bsdcompat/src/nmx_kernel.c */
+
+/* Called only at i915's late suspend decision. The IOKit value is the
+ * policy published at this point, which can still change before platform sleep. */
+extern "C" bool nmx_i915_select_s2idle(bool original)
+{
+    if (!PE_parse_boot_argn("-nmxs2idle", nullptr, 0))
+        return original;
+
+    IOService *root = IOService::getPMRootDomain();
+    OSObject *property = root ? root->copyProperty("IOPMSystemSleepType") : nullptr;
+    OSNumber *type = OSDynamicCast(OSNumber, property);
+    const int sleepType = type ? (int)type->unsigned32BitValue() : -1;
+    OSSafeReleaseNULL(property);
+
+    const bool useS2idle = original || sleepType == 7;  /* XNU Deep Idle */
+    IOLog("NMXPM s2idle-select: rootType=%d original=%d selected=%d\n",
+          sleepType, original, useS2idle);
+    return useS2idle;
+}
 
 class NMXGPU : public IOService {
     OSDeclareDefaultStructors(NMXGPU)

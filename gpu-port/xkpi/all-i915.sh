@@ -67,6 +67,12 @@ if [ -n "$GI" ]; then
 else
     echo "ERROR: display/intel_plane_initial.c not found"; exit 1
 fi
+PM_SRC=$(find "$K/drm-kmod" -path '*i915/i915_driver.c' | head -1)
+if [ -z "$PM_SRC" ]; then
+    echo "ERROR: i915_driver.c not found for system sleep patch"
+    exit 1
+fi
+"${NMX_PY:-/opt/homebrew/bin/python3}" patch_i915_s2idle.py "$PM_SRC" || exit 1
 GP=$(find "$K/drm-kmod" -path '*i915/display/intel_display_power.c' | head -1)
 if [ -n "$GP" ]; then
     ${NMX_PY:-/opt/homebrew/bin/python3} patch_i915_display_rpm.py "$GP" || { echo "ERROR: display runtime-PM patch failed"; exit 1; }
